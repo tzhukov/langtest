@@ -1,0 +1,15 @@
+# Tiltfile
+version: 0.1
+
+services:
+  backend:
+    build: ./backend
+    port: 8080
+    hot_reload: true
+  frontend:
+    build: ./frontend
+    port: 3000
+    hot_reload: true
+
+compose:
+  - docker-compose.yml

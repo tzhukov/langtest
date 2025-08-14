@@ -1,0 +1,29 @@
+# Local development with Tilt
+# Runs backend and frontend services locally
+
+# Backend Go service
+local_resource(
+    'backend',
+    serve_cmd='cd backend && go run main.go',
+    deps=['./backend'],
+    readiness_probe=probe(
+        http_get=http_get_action(port=8080, path='/health')
+    )
+)
+
+# Frontend React service  
+local_resource(
+    'frontend',
+    serve_cmd='cd frontend && BROWSER=none npm start',
+    deps=['./frontend/src', './frontend/public', './frontend/package.json'],
+    readiness_probe=probe(
+        http_get=http_get_action(port=3000, path='/')
+    )
+)
+
+# Install dependencies
+local_resource(
+    'install-deps',
+    cmd='make install',
+    deps=['./backend/go.mod', './frontend/package.json']
+)
