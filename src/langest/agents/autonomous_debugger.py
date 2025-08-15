@@ -216,14 +216,14 @@ class AutonomousDebuggingAgent:
                 Analyze this error and provide an EXACT solution. If file contents or directory listings are provided in the 'ADDITIONAL CONTEXT', use them to inform your diagnosis. Your response must include:
 
                 1. ROOT_CAUSE: Brief explanation of what's wrong
-                2. SOLUTION_TYPE: One of [FILE_CREATE, FILE_UPDATE, COMMAND_RUN]
+                2. SOLUTION_TYPE: One of [FILE_CREATE, FILE_UPDATE, COMMAND_RUN]. Use COMMAND_RUN for installing dependencies or running build steps, NOT for verification.
                 3. FILES_TO_CREATE: A list of files to create, including their full relative path and exact content.
                 4. FILES_TO_UPDATE: A list of files to update, including their full relative path and complete new content.
-                5. COMMANDS_TO_RUN: A list of commands to execute to apply the fix. Note: The original failing command will be re-run automatically for verification. If a command like `npm` needs to run in a subdirectory, you must include the `cd` command (e.g., `cd frontend && npm install some-package`).
+                5. COMMANDS_TO_RUN: A list of commands to execute to apply the fix (e.g., `npm install`). **Do NOT include test commands like `npm test` or `go test` here.** The original failing command will be re-run automatically for verification. If a command needs to run in a subdirectory, you must include the `cd` command (e.g., `cd frontend && npm install some-package`).
 
                 **IMPORTANT**: Your response MUST be a single, valid JSON object. Do not include any text outside of the JSON.
 
-                JSON Response Format:
+                JSON Response Format (Do not include a `verification_command` field):
                 {{
                     "root_cause": "explanation",
                     "solution_type": "type",
@@ -447,93 +447,99 @@ class AutonomousDebuggingAgent:
         if not project_path:
             project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../generated_fullstack_service'))
 
-        print("🎯 COMPREHENSIVE APPLICATION DEBUGGING")
-        print("=" * 70)
+        try:
+            print("🎯 COMPREHENSIVE APPLICATION DEBUGGING")
+            print("=" * 70)
 
-        results = {
-            "backend_build": False,
-            "frontend_build": False, 
-            "dependencies": False,
-            "tilt_setup": False,
-            "backend_start": False,
-            "frontend_start": False,
-            "tests": False
-        }
+            results = {
+                "backend_build": False,
+                "frontend_build": False, 
+                "dependencies": False,
+                "tilt_setup": False,
+                "backend_start": False,
+                "frontend_start": False,
+                "tests": False
+            }
 
-        # 1. Check and fix dependencies
-        print("\n1️⃣  CHECKING DEPENDENCIES")
-        print("-" * 30)
-        backend_path = os.path.join(project_path, "backend")
-        frontend_path = os.path.join(project_path, "frontend")
-        backend_deps = self.debug_until_working("go mod tidy", backend_path)
-        frontend_deps = self.debug_until_working("npm install", frontend_path)
-        if backend_deps and frontend_deps:
-            results["dependencies"] = True
+            # 1. Check and fix dependencies
+            print("\n1️⃣  CHECKING DEPENDENCIES")
+            print("-" * 30)
+            backend_path = os.path.join(project_path, "backend")
+            frontend_path = os.path.join(project_path, "frontend")
+            backend_deps = self.debug_until_working("go mod tidy", backend_path)
+            frontend_deps = self.debug_until_working("npm install", frontend_path)
+            if backend_deps and frontend_deps:
+                results["dependencies"] = True
 
-        # 2. Fix backend build
-        print("\n2️⃣  DEBUGGING BACKEND BUILD")
-        print("-" * 30)
-        if self.debug_until_working("cd backend && go build", project_path):
-            results["backend_build"] = True
+            # 2. Fix backend build
+            print("\n2️⃣  DEBUGGING BACKEND BUILD")
+            print("-" * 30)
+            if self.debug_until_working("cd backend && go build", project_path):
+                results["backend_build"] = True
 
-        # 3. Fix frontend build
-        print("\n3️⃣  DEBUGGING FRONTEND BUILD")
-        print("-" * 30)
-        if self.debug_until_working("cd frontend && npm run build", project_path):
-            results["frontend_build"] = True
+            # 3. Fix frontend build
+            print("\n3️⃣  DEBUGGING FRONTEND BUILD")
+            print("-" * 30)
+            if self.debug_until_working("cd frontend && npm run build", project_path):
+                results["frontend_build"] = True
 
-        # 4. Fix Tilt configuration
-        print("\n4️⃣  DEBUGGING TILT SETUP")
-        print("-" * 30)
-        if self.debug_until_working("tilt doctor", project_path):
-            results["tilt_setup"] = True
+            # 4. Fix Tilt configuration
+            print("\n4️⃣  DEBUGGING TILT SETUP")
+            print("-" * 30)
+            if self.debug_until_working("tilt doctor", project_path):
+                results["tilt_setup"] = True
 
-        # 5. Test backend startup
-        print("\n5️⃣  TESTING BACKEND STARTUP")
-        # Proactively clean up ports to avoid "address already in use" errors
-        self._cleanup_ports([8080, 3000], project_path)
-        print("-" * 30)
+            # 5. Test backend startup
+            print("\n5️⃣  TESTING BACKEND STARTUP")
+            # Proactively clean up ports to avoid "address already in use" errors
+            self._cleanup_ports([8080, 3000], project_path)
+            print("-" * 30)
 
-        # This command is designed to be more robust for background processes.
-        # 1. `nohup ... &` ensures the process detaches and keeps running.
-        # 2. Output is redirected to a log file for later inspection if needed.
-        # 3. `sleep 5` gives the Go server ample time to start.
-        # 4. `curl` checks if the server is healthy.
-        backend_startup_command = (
-            'bash -c "cd backend && nohup go run main.go > backend.log 2>&1 &" && '
-            'sleep 5 && curl -f http://localhost:8080/health'
-        )
-        backend_test = self.debug_until_working(backend_startup_command, project_path)
-        if backend_test:
-            results["backend_start"] = True
+            # This command is designed to be more robust for background processes.
+            # 1. `nohup ... &` ensures the process detaches and keeps running.
+            # 2. Output is redirected to a log file for later inspection if needed.
+            # 3. `sleep 5` gives the Go server ample time to start.
+            # 4. `curl` checks if the server is healthy.
+            backend_startup_command = (
+                'bash -c "cd backend && nohup go run main.go > backend.log 2>&1 &" && '
+                'sleep 5 && curl -f http://localhost:8080/health'
+            )
+            backend_test = self.debug_until_working(backend_startup_command, project_path)
+            if backend_test:
+                results["backend_start"] = True
 
-        # 6. Test frontend startup
-        print("\n6️⃣  TESTING FRONTEND STARTUP")
-        print("-" * 30)
-        # This command is for the frontend service.
-        # `BROWSER=none` prevents opening a browser tab.
-        # `sleep 15` gives React dev server time to compile and start.
-        frontend_startup_command = (
-            'bash -c "cd frontend && BROWSER=none nohup npm start > frontend.log 2>&1 &" && '
-            'sleep 15 && curl -f http://localhost:3000'
-        )
-        frontend_test = self.debug_until_working(frontend_startup_command, project_path)
-        if frontend_test:
-            results["frontend_start"] = True
+            # 6. Test frontend startup
+            print("\n6️⃣  TESTING FRONTEND STARTUP")
+            print("-" * 30)
+            # This command is for the frontend service.
+            # `BROWSER=none` prevents opening a browser tab.
+            # `sleep 15` gives React dev server time to compile and start.
+            frontend_startup_command = (
+                'bash -c "cd frontend && BROWSER=none nohup npm start > frontend.log 2>&1 &" && '
+                'sleep 15 && curl -f http://localhost:3000'
+            )
+            frontend_test = self.debug_until_working(frontend_startup_command, project_path)
+            if frontend_test:
+                results["frontend_start"] = True
 
-        # 7. Run tests
-        print("\n7️⃣  RUNNING TESTS")
-        print("-" * 30)
-        if self.debug_until_working("make test", project_path):
-            results["tests"] = True
+            # 7. Run tests
+            print("\n7️⃣  RUNNING TESTS")
+            print("-" * 30)
+            if self.debug_until_working("make test", project_path):
+                results["tests"] = True
 
-        # Summary
-        print("\n📊 DEBUGGING SUMMARY")
-        print("=" * 50)
-        for component, status in results.items():
-            status_icon = "✅" if status else "❌"
-            print(f"{status_icon} {component.replace('_', ' ').title()}")
-        total_success = sum(results.values())
-        total_components = len(results)
-        print(f"\n🎯 Overall Success: {total_success}/{total_components} components working")
-        return results
+            # Summary
+            print("\n📊 DEBUGGING SUMMARY")
+            print("=" * 50)
+            for component, status in results.items():
+                status_icon = "✅" if status else "❌"
+                print(f"{status_icon} {component.replace('_', ' ').title()}")
+            total_success = sum(results.values())
+            total_components = len(results)
+            print(f"\n🎯 Overall Success: {total_success}/{total_components} components working")
+            return results
+        finally:
+            # Ensure all background services are stopped at the end of the run
+            print("\n🛑 Shutting down background services...")
+            self._cleanup_ports([8080, 3000], project_path)
+            print("✅ Cleanup complete.")

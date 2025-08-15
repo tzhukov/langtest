@@ -1,0 +1,30 @@
+# New Feature Requirements: Add Task Descriptions
+
+## 1. Overview
+
+The goal of this feature is to enhance the task management application by allowing users to add a detailed description to each task. This will provide more context for tasks beyond just a title.
+
+## 2. Backend Requirements (Go)
+
+-   **Data Model:** The `Task` struct in `backend/main.go` must be updated to include a new field: `Description` of type `string`.
+-   **API Changes:**
+    -   The `POST /tasks` endpoint (create task) must be updated to accept the `description` in the JSON payload.
+    -   The `PUT /tasks/:id` endpoint (update task) must be updated to allow changing the `description`.
+    -   The `GET /tasks` and `GET /tasks/:id` endpoints should automatically include the new `description` field in their JSON responses.
+
+## 3. Frontend Requirements (React)
+
+-   **Task Form:** The form used for creating and editing tasks must be updated to include a new text input field for the "Description".
+-   **Task Display:** Each task displayed in the list should show its description below the task title. If a description is long, it can be truncated with an option to view the full text, but for this initial implementation, just displaying the full text is acceptable.
+-   **State Management:** The frontend state that manages the list of tasks must be updated to handle the new `description` field.
+
+## 4. Testing Requirements
+
+-   **New Frontend Test:** A new test case should be added to `frontend/src/App.test.js` to verify that when a task with a description is rendered, the description text is visible on the screen.
+
+## 5. Acceptance Criteria
+
+-   A user can create a new task with a title and a description.
+-   The description is visible on the main task list view.
+-   A user can edit an existing task's description.
+-   All existing tests must continue to pass, along with the new test.
